@@ -16,11 +16,11 @@ body{background:#0b0b0b;color:white;font-family:Arial;margin:0;padding:15px;}
 input,button{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:none;}
 button{background:#1e90ff;color:white;font-weight:bold;cursor:pointer;}
 button.red{background:#ff4d4d;}
+button.green{background:#00ff7f;}
 .hidden{display:none;}
 .item{border-bottom:1px solid #333;padding:8px 0;}
 </style>
 </head>
-
 <body>
 
 <h2>🏦 Banco Devito</h2>
@@ -42,7 +42,7 @@ button.red{background:#ff4d4d;}
     <b>Score:</b> <span id="score">50</span>
   </div>
 
-  <!-- ENVIAR -->
+  <!-- ENVIAR DINERO -->
   <div class="card">
     <h3>💸 Enviar dinero</h3>
     <input id="destino" placeholder="DEV-XXXXXX">
@@ -50,20 +50,20 @@ button.red{background:#ff4d4d;}
     <button onclick="enviar()">Enviar</button>
   </div>
 
-  <!-- PRESTAR -->
+  <!-- PRESTAR A OTRO JUGADOR -->
   <div class="card">
-    <h3>🤝 Prestar dinero</h3>
+    <h3>🤝 Prestar dinero a otro jugador</h3>
     <input id="prestDestino" placeholder="DEV-XXXXXX">
     <input id="prestMonto" type="number" placeholder="Monto">
     <input id="prestDias" type="number" placeholder="Días para devolver">
     <button onclick="prestar()">Prestar</button>
   </div>
 
-  <!-- PRÉSTAMO BANCO -->
+  <!-- PRÉSTAMO DEL BANCO -->
   <div class="card">
-    <h3>🏦 Préstamo del banco</h3>
+    <h3>🏦 Solicitar préstamo del banco</h3>
     <input id="bancoMonto" type="number" placeholder="Monto">
-    <button onclick="prestamoBanco()">Solicitar</button>
+    <button onclick="prestamoBanco()">Solicitar préstamo</button>
   </div>
 
   <!-- HISTORIAL -->
@@ -74,7 +74,7 @@ button.red{background:#ff4d4d;}
 
   <!-- PRÉSTAMOS -->
   <div class="card">
-    <h3>📑 Préstamos</h3>
+    <h3>📑 Préstamos activos</h3>
     <div id="prestamos"></div>
   </div>
 
@@ -110,8 +110,7 @@ auth.onAuthStateChanged(u=>{
 
 // LOGIN / REGISTRO
 function login(){
-  auth.signInWithEmailAndPassword(email.value,pass.value)
-  .catch(e=>alert(e.message));
+  auth.signInWithEmailAndPassword(email.value,pass.value).catch(e=>alert(e.message));
 }
 
 function register(){
@@ -120,27 +119,25 @@ function register(){
     const uid=r.user.uid;
     cuenta="CUENTA-"+Math.floor(100000+Math.random()*900000);
     db.ref("usuarios/"+uid).set({cuenta,score:50});
-    db.ref("cuentas/"+cuenta).set({saldo:1000});
+    db.ref("cuentas/"+cuenta).set({saldo:1000,totalRecibido:0});
     tarjeta="DEV-"+Math.floor(100000+Math.random()*900000);
     db.ref("tarjetas/"+tarjeta).set({cuenta});
     alert("Cuenta creada ✔️");
   }).catch(e=>alert(e.message));
 }
 
-// CARGAR
+// CARGAR BANCO
 function cargarBanco(uid){
   db.ref("usuarios/"+uid).once("value").then(s=>{
     cuenta=s.val().cuenta;
     score.innerText=s.val().score||50;
 
-    db.ref("cuentas/"+cuenta+"/saldo")
-      .on("value",v=>saldo.innerText=v.val()||0);
+    db.ref("cuentas/"+cuenta+"/saldo").on("value",v=>saldo.innerText=v.val()||0);
 
-    db.ref("tarjetas").orderByChild("cuenta")
-      .equalTo(cuenta).once("value").then(r=>{
-        r.forEach(x=>tarjeta=x.key);
-        document.getElementById("tarjeta").innerText=tarjeta;
-      });
+    db.ref("tarjetas").orderByChild("cuenta").equalTo(cuenta).once("value").then(r=>{
+      r.forEach(x=>tarjeta=x.key);
+      document.getElementById("tarjeta").innerText=tarjeta;
+    });
 
     cargarHistorial();
     cargarPrestamos();
@@ -164,15 +161,14 @@ function moverSaldo(dest,m,desc){
     if(s.val()<m) return alert("Saldo insuficiente");
     ref.set(s.val()-m);
     db.ref("cuentas/"+dest+"/saldo").transaction(v=>(v||0)+m);
+    db.ref("cuentas/"+dest+"/totalRecibido").transaction(v=>(v||0)+m);
     guardarHistorial(desc,m);
   });
 }
 
-// HISTORIAL
+// GUARDAR HISTORIAL
 function guardarHistorial(desc,m){
-  db.ref("historial/"+cuenta).push({
-    desc,m,fecha:Date.now()
-  });
+  db.ref("historial/"+cuenta).push({desc,m,fecha:Date.now()});
   cargarHistorial();
 }
 
@@ -186,7 +182,7 @@ function cargarHistorial(){
   });
 }
 
-// PRESTAR
+// PRESTAR A OTRO JUGADOR
 function prestar(){
   const d=prestDestino.value,m=parseInt(prestMonto.value),dias=parseInt(prestDias.value);
   if(!d||!m||!dias) return alert("Datos incompletos");
@@ -196,16 +192,36 @@ function prestar(){
     db.ref("prestamos/"+t.val().cuenta).push({
       de:cuenta,m,dias,inicio:Date.now(),pagado:false
     });
+    cargarPrestamos();
   });
 }
 
-// PRÉSTAMO BANCO
+// PRÉSTAMO BANCO CON LÍMITE Y PLAZO AUTOMÁTICO
 function prestamoBanco(){
   const m=parseInt(bancoMonto.value);
   if(!m) return alert("Monto inválido");
-  db.ref("cuentas/"+cuenta+"/saldo").transaction(v=>(v||0)+m);
-  db.ref("prestamos/"+cuenta).push({
-    de:"BANCO",m,dias:7,inicio:Date.now(),pagado:false
+
+  db.ref("cuentas/"+cuenta).once("value").then(s=>{
+    const saldo=s.val().saldo||0;
+    const totalRecibido=s.val().totalRecibido||0;
+    const score=50; // Puedes usar score real si quieres
+
+    const maxPrestamo=Math.min(totalRecibido*2 || 1000, saldo*3 || 1000);
+    if(m>maxPrestamo) return alert(`Monto excede el límite máximo: ${maxPrestamo} coins`);
+
+    let dias=7;
+    if(m<=300) dias=3;
+    else if(m<=700) dias=7;
+    else dias=14;
+
+    db.ref("cuentas/"+cuenta+"/saldo").transaction(v=>(v||0)+m);
+    db.ref("prestamos/"+cuenta).push({
+      de:"BANCO",m,dias,inicio:Date.now(),pagado:false
+    });
+    guardarHistorial("Préstamo del banco recibido",m);
+    cargarPrestamos();
+    bancoMonto.value="";
+    alert(`Préstamo aprobado por ${m} coins. Debe devolverse en ${dias} días`);
   });
 }
 
@@ -214,10 +230,32 @@ function cargarPrestamos(){
   prestamos.innerHTML="";
   db.ref("prestamos/"+cuenta).once("value").then(s=>{
     if(!s.exists()) return prestamos.innerHTML="<i>Sin préstamos</i>";
-    Object.values(s.val()).forEach(p=>{
+    Object.entries(s.val()).forEach(([id,p])=>{
+      const estado=p.pagado?`<span class="green">✅ Pagado</span>`:`❌ Activo`;
+      const fechaLimite=new Date(p.inicio + p.dias*24*60*60*1000).toLocaleDateString();
       prestamos.innerHTML+=`<div class="item">
-        De: ${p.de}<br>Monto: ${p.m}<br>Días: ${p.dias}
+        De: ${p.de}<br>
+        Monto: ${p.m} coins<br>
+        Plazo: ${p.dias} días<br>
+        Fecha límite: ${fechaLimite}<br>
+        Estado: ${estado}
+        ${!p.pagado?`<br><button onclick="pagarPrestamo('${id}')">Pagar préstamo</button>`:""}
       </div>`;
+    });
+  });
+}
+
+// PAGAR PRÉSTAMO
+function pagarPrestamo(id){
+  db.ref("prestamos/"+cuenta+"/"+id).once("value").then(p=>{
+    if(!p.exists()) return;
+    const m=p.val().m;
+    db.ref("cuentas/"+cuenta+"/saldo").once("value").then(s=>{
+      if(s.val()<m) return alert("Saldo insuficiente");
+      db.ref("cuentas/"+cuenta+"/saldo").set(s.val()-m);
+      db.ref("prestamos/"+cuenta+"/"+id+"/pagado").set(true);
+      guardarHistorial("Pago de préstamo "+p.val().de,m);
+      cargarPrestamos();
     });
   });
 }
