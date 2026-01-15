@@ -5,38 +5,15 @@
 <title>Banco Devito</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{
-  background:#0b0b0b;
-  color:white;
-  font-family:Arial;
-  padding:15px;
-}
-.card{
-  background:#141414;
-  border:1px solid #333;
-  border-radius:10px;
-  padding:15px;
-  margin-bottom:15px;
-}
-input,button{
-  width:100%;
-  padding:10px;
-  margin-top:8px;
-  border-radius:6px;
-  border:none;
-}
-button{
-  background:#1e90ff;
-  color:white;
-  font-weight:bold;
-  cursor:pointer;
-}
+body{background:#0b0b0b;color:white;font-family:Arial;padding:15px}
+.card{background:#141414;border:1px solid #333;border-radius:10px;padding:15px;margin-bottom:15px}
+input,button{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:none}
+button{background:#1e90ff;color:white;font-weight:bold;cursor:pointer}
 .hidden{display:none}
 .green{color:#00ff7f}
 .red{color:#ff5c5c}
@@ -45,9 +22,8 @@ button{
 </head>
 <body>
 
-<h2>🏦 Banco Devito (Juego Nuevo)</h2>
+<h2>🏦 Banco Devito</h2>
 
-<!-- LOGIN -->
 <div id="loginBox" class="card">
   <input id="email" placeholder="Correo">
   <input id="pass" type="password" placeholder="Contraseña">
@@ -55,7 +31,6 @@ button{
   <button onclick="register()">Crear cuenta</button>
 </div>
 
-<!-- BANCO -->
 <div id="bankBox" class="hidden">
 
 <div class="card">
@@ -64,7 +39,6 @@ button{
   <b>Score:</b> <span id="score">50</span>
 </div>
 
-<!-- ENVIAR -->
 <div class="card">
   <h3>💸 Enviar dinero</h3>
   <input id="destino" placeholder="DEV-XXXXXX">
@@ -72,34 +46,20 @@ button{
   <button onclick="enviar()">Enviar</button>
 </div>
 
-<!-- PRESTAMO ENTRE JUGADORES -->
 <div class="card">
-  <h3>🤝 Préstamo a jugador</h3>
-  <input id="prestTarjeta" placeholder="DEV-XXXXXX">
-  <input id="prestMonto" type="number" placeholder="Monto">
-  <label>
-    <input type="checkbox" id="prestInteres"> Aplicar intereses
-  </label>
-  <button onclick="prestamoJugador()">Prestar</button>
-</div>
-
-<!-- PRESTAMO BANCO -->
-<div class="card">
-  <h3>🏦 Préstamo del banco</h3>
-  <input id="bancoMonto" type="number" placeholder="Monto solicitado">
+  <h3>🏦 Préstamo banco</h3>
+  <input id="bancoMonto" type="number" placeholder="Monto">
   <button onclick="prestamoBanco()">Solicitar</button>
 </div>
 
-<!-- PRESTAMOS -->
 <div class="card">
   <h3>📑 Préstamos</h3>
-  <div id="prestamos"><i>Sin préstamos</i></div>
+  <div id="prestamos"></div>
 </div>
 
-<!-- HISTORIAL -->
 <div class="card">
   <h3>📄 Historial</h3>
-  <div id="historial"><i>Vacío</i></div>
+  <div id="historial"></div>
   <button onclick="borrarHistorial()">Borrar historial</button>
 </div>
 
@@ -109,7 +69,6 @@ button{
 </div>
 
 <script>
-// 🔹 FIREBASE (MISMO PROYECTO)
 firebase.initializeApp({
   apiKey: "AIzaSyDeUQx95EfJgmNeyh_L2Cnzqmm37emwJhw",
   authDomain: "bancodevito.firebaseapp.com",
@@ -120,26 +79,32 @@ firebase.initializeApp({
 const auth = firebase.auth();
 const db = firebase.database();
 
-let cuenta="", tarjeta="", scoreActual=50;
+let uidActual = null;
+let cuenta = null;
+let tarjeta = null;
+let scoreActual = 50;
 
-// 🔹 SESIÓN
-auth.onAuthStateChanged(u=>{
-  if(u){
+// SESIÓN
+auth.onAuthStateChanged(user=>{
+  if(user){
+    uidActual = user.uid;
     loginBox.classList.add("hidden");
     bankBox.classList.remove("hidden");
-    cargarUsuario(u.uid);
+    cargarDatos();
   }else{
+    uidActual = null;
     loginBox.classList.remove("hidden");
     bankBox.classList.add("hidden");
   }
 });
 
-// 🔹 LOGIN / REGISTER
+// LOGIN
 function login(){
   auth.signInWithEmailAndPassword(email.value, pass.value)
   .catch(e=>alert(e.message));
 }
 
+// REGISTRO
 function register(){
   auth.createUserWithEmailAndPassword(email.value, pass.value)
   .then(r=>{
@@ -147,27 +112,23 @@ function register(){
     cuenta = "CUENTA-" + Math.floor(Math.random()*900000+100000);
     tarjeta = "DEV-" + Math.floor(Math.random()*900000+100000);
 
-    db.ref("usuarios/"+uid).set({
-      cuenta: cuenta,
-      score: 50
-    });
+    db.ref("usuarios/"+uid).set({ cuenta, score:50 });
+    db.ref("cuentas/"+cuenta).set({ saldo:1000, totalRecibido:0 });
+    db.ref("tarjetas/"+tarjeta).set({ cuenta });
 
-    db.ref("cuentas/"+cuenta).set({
-      saldo: 1000,
-      totalRecibido: 0
-    });
-
-    db.ref("tarjetas/"+tarjeta).set({
-      cuenta: cuenta
-    });
-
-    alert("Cuenta creada. Juego nuevo iniciado.");
-  });
+    alert("Cuenta creada correctamente");
+  })
+  .catch(e=>alert(e.message));
 }
 
-// 🔹 CARGAR USUARIO
-function cargarUsuario(uid){
-  db.ref("usuarios/"+uid).once("value").then(s=>{
+// CARGAR DATOS
+function cargarDatos(){
+  db.ref("usuarios/"+uidActual).once("value").then(s=>{
+    if(!s.exists()){
+      alert("Error de datos. Vuelve a iniciar sesión.");
+      logout();
+      return;
+    }
     cuenta = s.val().cuenta;
     scoreActual = s.val().score;
     score.innerText = scoreActual;
@@ -186,85 +147,54 @@ function cargarUsuario(uid){
   });
 }
 
-// 🔹 ENVIAR DINERO
+// ENVIAR DINERO
 function enviar(){
   const d = destino.value;
   const m = parseInt(monto.value);
-  if(!d||!m) return;
+  if(!d || m<=0) return alert("Datos inválidos");
 
   db.ref("tarjetas/"+d).once("value").then(t=>{
-    if(!t.exists()) return alert("Tarjeta inválida");
+    if(!t.exists()) return alert("Tarjeta no existe");
 
-    moverSaldo(t.val().cuenta, m, "Envío");
-  });
-}
+    const cuentaDestino = t.val().cuenta;
 
-function moverSaldo(dest, m, desc){
-  db.ref("cuentas/"+cuenta+"/saldo").once("value").then(s=>{
-    if(s.val() < m) return alert("Saldo insuficiente");
+    db.ref("cuentas/"+cuenta+"/saldo").once("value").then(s=>{
+      if(s.val()<m) return alert("Saldo insuficiente");
 
-    db.ref("cuentas/"+cuenta+"/saldo").set(s.val()-m);
-    db.ref("cuentas/"+dest+"/saldo").transaction(v=>(v||0)+m);
-    guardarHistorial(desc, m);
-  });
-}
+      db.ref("cuentas/"+cuenta+"/saldo").set(s.val()-m);
+      db.ref("cuentas/"+cuentaDestino+"/saldo")
+        .transaction(v=>(v||0)+m);
 
-// 🔹 PRESTAMO ENTRE JUGADORES
-function prestamoJugador(){
-  const d = prestTarjeta.value;
-  const m = parseInt(prestMonto.value);
-  const conInteres = prestInteres.checked;
-  if(!d||!m) return;
-
-  db.ref("tarjetas/"+d).once("value").then(t=>{
-    if(!t.exists()) return alert("Jugador inválido");
-
-    let interes = conInteres ? (m<=500?0.04:m<=1000?0.07:0.10) : 0;
-    let dias = m<=300?3:m<=700?7:m<=1500?14:30;
-    let deuda = Math.floor(m*(1+interes));
-
-    moverSaldo(t.val().cuenta, m, "Préstamo a jugador");
-
-    db.ref("prestamos/"+t.val().cuenta).push({
-      de: cuenta,
-      monto: m,
-      deuda: deuda,
-      dias: dias,
-      inicio: Date.now(),
-      pagado: false
+      guardarHistorial("Envío",m);
     });
-
-    alert("Préstamo concedido");
   });
 }
 
-// 🔹 PRESTAMO BANCO
+// PRÉSTAMO BANCO
 function prestamoBanco(){
   const m = parseInt(bancoMonto.value);
-  if(!m) return;
+  if(m<=0) return alert("Monto inválido");
 
-  const max = scoreActual * 20;
-  if(m > max) return alert("No aprobado por score");
+  const limite = scoreActual * 20;
+  if(m>limite) return alert("Préstamo denegado por score");
 
-  let interes = m<=500?0.05:m<=1000?0.08:0.12;
-  let dias = m<=300?3:m<=700?7:m<=1500?14:30;
-  let deuda = Math.floor(m*(1+interes));
+  const interes = m<=500?0.05:m<=1000?0.08:0.12;
+  const deuda = Math.floor(m*(1+interes));
 
-  db.ref("cuentas/"+cuenta+"/saldo").transaction(v=>(v||0)+m);
+  db.ref("cuentas/"+cuenta+"/saldo")
+    .transaction(v=>(v||0)+m);
 
   db.ref("prestamos/"+cuenta).push({
-    de:"BANCO",
     monto:m,
     deuda:deuda,
-    dias:dias,
-    inicio:Date.now(),
     pagado:false
   });
 
-  guardarHistorial("Préstamo banco", m);
+  guardarHistorial("Préstamo banco",m);
+  cargarPrestamos();
 }
 
-// 🔹 PRESTAMOS
+// PRÉSTAMOS
 function cargarPrestamos(){
   prestamos.innerHTML="";
   db.ref("prestamos/"+cuenta).once("value").then(s=>{
@@ -275,8 +205,7 @@ function cargarPrestamos(){
     Object.entries(s.val()).forEach(([id,p])=>{
       prestamos.innerHTML+=`
       <div class="item">
-        De: ${p.de}<br>
-        Total: ${p.deuda}<br>
+        Deuda: ${p.deuda}<br>
         Estado: ${p.pagado?'<span class="green">Pagado</span>':'<span class="red">Activo</span>'}
         ${!p.pagado?`<button onclick="pagar('${id}',${p.deuda})">Pagar</button>`:""}
       </div>`;
@@ -291,12 +220,12 @@ function pagar(id,m){
     db.ref("prestamos/"+cuenta+"/"+id+"/pagado").set(true);
     scoreActual+=5;
     score.innerText=scoreActual;
-    guardarHistorial("Pago préstamo", m);
+    guardarHistorial("Pago préstamo",m);
     cargarPrestamos();
   });
 }
 
-// 🔹 HISTORIAL
+// HISTORIAL
 function guardarHistorial(d,m){
   db.ref("historial/"+cuenta).push({desc:d,m,fecha:Date.now()});
   cargarHistorial();
@@ -322,7 +251,6 @@ function borrarHistorial(){
   }
 }
 
-// 🔹 LOGOUT / DELETE
 function logout(){ auth.signOut(); }
 
 function eliminarCuenta(){
