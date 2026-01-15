@@ -1,156 +1,121 @@
-<!-- BANCO RB - HTML COMPLETO
-MISMO MODELO + MISMO FIREBASE
-PRÉSTAMOS BANCO + PRÉSTAMOS ENTRE JUGADORES
-SCORE + INTERESES + MENSAJES
----------------------------------- -->
-
 <!DOCTYPE html>
 
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>BancoRB</title>
+<title>Banco Devito</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Firebase compat (OBLIGATORIO) -->
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 <style>
-body{font-family:Arial;background:#111;color:#fff;padding:20px}
-.card{background:#1e1e1e;padding:15px;margin:15px 0;border-radius:10px}
-input,button{width:100%;padding:8px;margin:5px 0;border-radius:5px;border:none}
-button{background:#00ff99;font-weight:bold}
-.red{color:#ff4444}
-.green{color:#00ff99}
+body{background:#0b0b0b;color:white;font-family:Arial;margin:0;padding:15px;}
+.card{border:1px solid #333;border-radius:10px;padding:15px;margin-bottom:15px;}
+input,button{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:none;}
+button{background:#1e90ff;color:white;font-weight:bold;cursor:pointer;}
+button.red{background:#ff4d4d;}
+.hidden{display:none;}
+.item{border-bottom:1px solid #333;padding:8px 0;}
 </style>
+
 </head>
 <body>
 
-<h1>🏦 BancoRB</h1>
+<h2>🏦 Banco Devito</h2>
 
 <!-- LOGIN -->
 
-<div class="card" id="loginBox">
-<h3>Iniciar sesión</h3>
-<input id="email" placeholder="Correo">
-<input id="pass" type="password" placeholder="Contraseña">
-<button onclick="login()">Entrar</button>
-<button onclick="register()">Registrarse</button>
+<div id="loginBox" class="card">
+  <input id="email" type="email" placeholder="Correo">
+  <input id="pass" type="password" placeholder="Contraseña (mín 6)">
+  <button onclick="login()">Iniciar sesión</button>
+  <button onclick="register()">Crear cuenta</button>
 </div>
 
-<!-- PANEL -->
+<!-- BANCO -->
 
-<div id="panel" style="display:none">
-<div class="card">
-<h3>Cuenta</h3>
-<p>Saldo: <b id="saldo">0</b></p>
-<p>Score: <b id="score">500</b></p>
+<div id="bankBox" class="hidden">
+  <div class="card">
+    <b>Saldo:</b> <span id="saldo">0</span> coins<br>
+    <b>Cuenta:</b> <span id="cuentaId"></span><br>
+    <b>Score:</b> <span id="score">500</span>
+  </div>
+
 <button onclick="logout()">Cerrar sesión</button>
-</div>
 
-<!-- PRESTAMO BANCO -->
-
-<div class="card">
-<h3>🏦 Préstamo del banco</h3>
-<input id="montoBanco" type="number" placeholder="Monto">
-<button onclick="prestamoBanco()">Solicitar</button>
-<div id="msgBanco"></div>
-</div>
-
-<!-- PRESTAMO JUGADOR -->
-
-<div class="card">
-<h3>🤝 Prestar a jugador</h3>
-<input id="tarjetaJugador" placeholder="ID jugador">
-<input id="montoJugador" type="number" placeholder="Monto">
-<input id="diasJugador" type="number" placeholder="Días">
-<label><input type="checkbox" id="interesJugador"> Cobrar interés</label>
-<button onclick="prestamoJugador()">Prestar</button>
-<div id="msgJugador"></div>
-</div>
-
-<!-- PRESTAMOS -->
-
-<div class="card">
-<h3>📑 Préstamos</h3>
-<div id="listaPrestamos"></div>
-</div>
 </div>
 
 <script>
-// FIREBASE
-const firebaseConfig={
-  apiKey:"TU_API_KEY",
-  authDomain:"TU_AUTH",
-  databaseURL:"TU_DB_URL",
-  projectId:"TU_PROJECT"
+/***** CONFIGURA TU FIREBASE REAL AQUI *****/
+const firebaseConfig = {
+  apiKey: "REEMPLAZA_AQUI",
+  authDomain: "REEMPLAZA_AQUI",
+  databaseURL: "REEMPLAZA_AQUI",
+  projectId: "REEMPLAZA_AQUI"
 };
+
 firebase.initializeApp(firebaseConfig);
-const auth=firebase.auth();
-const db=firebase.database();
-let uid="";
 
-// AUTH
-function login(){auth.signInWithEmailAndPassword(email.value,pass.value)}
-function register(){auth.createUserWithEmailAndPassword(email.value,pass.value)}
-function logout(){auth.signOut()}
+const auth = firebase.auth();
+const db = firebase.database();
 
-// SESION
-auth.onAuthStateChanged(u=>{
- if(u){uid=u.uid;loginBox.style.display='none';panel.style.display='block';cargar();}
- else{loginBox.style.display='block';panel.style.display='none'}
+let cuenta = "";
+
+/***** SESION *****/
+auth.onAuthStateChanged(user => {
+  if(user){
+    loginBox.classList.add('hidden');
+    bankBox.classList.remove('hidden');
+    cargarBanco(user.uid);
+  } else {
+    loginBox.classList.remove('hidden');
+    bankBox.classList.add('hidden');
+  }
 });
 
-function cargar(){
- db.ref('users/'+uid).once('value').then(s=>{
-  if(!s.exists()){
-   db.ref('users/'+uid).set({saldo:1000,score:500})
-  }
- })
- actualizar();
- cargarPrestamos();
+/***** LOGIN *****/
+function login(){
+  if(!email.value || !pass.value) return alert("Completa los datos");
+  auth.signInWithEmailAndPassword(email.value, pass.value)
+    .catch(e => alert(e.message));
 }
 
-function actualizar(){
- db.ref('users/'+uid).on('value',s=>{
-  saldo.innerText=s.val().saldo;
-  score.innerText=s.val().score;
- })
-}
-
-// PRESTAMO BANCO
-function prestamoBanco(){
- const m=parseInt(montoBanco.value);
- msgBanco.innerText="";
- db.ref('users/'+uid).once('value').then(s=>{
-  let u=s.val();
-  if(u.score<400){msgBanco.innerHTML='<span class=red>Score muy bajo</span>';return}
-  if(m>u.saldo*3){msgBanco.innerHTML='<span class=red>Monto no permitido</span>';return}
-  const interes=m<=500?0.05:m<=1000?0.08:0.12;
-  const total=Math.floor(m*(1+interes));
-  db.ref('users/'+uid).update({saldo:u.saldo+m});
-  db.ref('prestamos/'+uid).push({tipo:'banco',m,total,pagado:false});
-  msgBanco.innerHTML='<span class=green>Préstamo concedido</span>';
- })
-}
-
-// PRESTAMO JUGADOR
-function prestamoJugador(){
- const m=parseInt(montoJugador.value);
- const d=parseInt(diasJugador.value);
- if(!m||!d){msgJugador.innerText='Datos incompletos';return}
- const interes=interesJugador.checked?(m<=500?0.05:m<=1000?0.08:0.12):0;
- db.ref('prestamos/'+uid).push({tipo:'jugador',m,interes,total:Math.floor(m*(1+interes)),pagado:false});
- msgJugador.innerHTML='<span class=green>Préstamo realizado</span>';
-}
-
-function cargarPrestamos(){
- db.ref('prestamos/'+uid).on('value',s=>{
-  listaPrestamos.innerHTML='';
-  s.forEach(p=>{
-   let e=p.val();
-   listaPrestamos.innerHTML+=`<p>${e.tipo} - ${e.total} - ${e.pagado?'🟢 Pagado':'🔴 Activo'}</p>`;
+/***** REGISTRO *****/
+function register(){
+  if(!email.value || !pass.value) return alert("Completa los datos");
+  auth.createUserWithEmailAndPassword(email.value, pass.value)
+  .then(r => {
+    const uid = r.user.uid;
+    cuenta = "DEV-" + Math.floor(100000 + Math.random()*900000);
+    db.ref("usuarios/"+uid).set({cuenta, score:500});
+    db.ref("cuentas/"+cuenta).set({saldo:1000});
+    alert("Cuenta creada correctamente");
   })
- })
+  .catch(e => alert(e.message));
 }
+
+/***** CARGAR DATOS *****/
+function cargarBanco(uid){
+  db.ref("usuarios/"+uid).once("value").then(snap => {
+    if(!snap.exists()) return;
+    cuenta = snap.val().cuenta;
+    cuentaId.innerText = cuenta;
+    score.innerText = snap.val().score || 500;
+
+    db.ref("cuentas/"+cuenta+"/saldo").on("value", v => {
+      saldo.innerText = v.val() || 0;
+    });
+  });
+}
+
+/***** LOGOUT *****/
+function logout(){ auth.signOut(); }
 </script>
 
 </body>
