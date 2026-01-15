@@ -13,18 +13,14 @@
 <style>
 body{background:#0b0b0b;color:white;font-family:Arial;margin:0;padding:15px;}
 .card{border:1px solid #333;border-radius:10px;padding:15px;margin-bottom:15px;}
-input,button{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:none;font-size:16px;}
+input,button{width:100%;padding:10px;margin-top:8px;border-radius:6px;border:none;}
 button{background:#1e90ff;color:white;font-weight:bold;cursor:pointer;}
-button:hover{background:#1c7ed6;}
+button.red{background:#ff4d4d;}
 .hidden{display:none;}
-#historial,#prestamos{max-height:300px;overflow-y:auto;margin-top:10px;}
-.transaccion{border-bottom:1px solid #333;padding:5px 0;}
-.enviado{color:#1e90ff;}
-.recibido{color:#00ff7f;}
-.prestamoActivo{color:#ffd43b;}
-.prestamoPagado{color:#00ff7f;}
+.item{border-bottom:1px solid #333;padding:8px 0;}
 </style>
 </head>
+
 <body>
 
 <h2>🏦 Banco Devito</h2>
@@ -38,59 +34,56 @@ button:hover{background:#1c7ed6;}
 </div>
 
 <!-- BANCO -->
-<div id="bankBox" class="card hidden">
+<div id="bankBox" class="hidden">
 
-  <!-- SALDO -->
-  <div>
-    <b>Saldo:</b> <span id="saldo">0</span> coins<br><br>
+  <div class="card">
+    <b>Saldo:</b> <span id="saldo">0</span> coins<br>
     <b>Tarjeta:</b> <span id="tarjeta"></span><br>
-    <b>Score:</b> <span id="score">0</span>
+    <b>Score:</b> <span id="score">50</span>
   </div>
 
-  <!-- ENVÍO MANUAL -->
-  <div style="margin-top:15px;">
-    <h3>✏️ Enviar dinero a otro jugador</h3>
-    <input id="destinoManual" placeholder="DEV-XXXXXX">
-    <input id="montoManual" type="number" placeholder="Monto">
-    <button onclick="enviarManual()">Enviar</button>
+  <!-- ENVIAR -->
+  <div class="card">
+    <h3>💸 Enviar dinero</h3>
+    <input id="destino" placeholder="DEV-XXXXXX">
+    <input id="monto" type="number" placeholder="Monto">
+    <button onclick="enviar()">Enviar</button>
   </div>
 
-  <!-- PRÉSTAMOS A OTROS JUGADORES -->
-  <div style="margin-top:15px;">
-    <h3>💸 Prestar dinero a un jugador</h3>
-    <input id="prestamoDestino" placeholder="Jugador receptor DEV-XXXXXX">
-    <input id="prestamoMonto" type="number" placeholder="Monto a prestar">
-    <input id="prestamoPlazo" type="number" placeholder="Plazo (días)">
-    <button onclick="prestarJugador()">Prestar dinero</button>
+  <!-- PRESTAR -->
+  <div class="card">
+    <h3>🤝 Prestar dinero</h3>
+    <input id="prestDestino" placeholder="DEV-XXXXXX">
+    <input id="prestMonto" type="number" placeholder="Monto">
+    <input id="prestDias" type="number" placeholder="Días para devolver">
+    <button onclick="prestar()">Prestar</button>
   </div>
 
-  <!-- PRÉSTAMOS SOLICITADOS AL BANCO -->
-  <div style="margin-top:15px;">
-    <h3>🏦 Solicitar préstamo al banco</h3>
-    <input id="prestamoBancoMonto" type="number" placeholder="Monto solicitado">
-    <button onclick="solicitarPrestamoBanco()">Solicitar préstamo</button>
+  <!-- PRÉSTAMO BANCO -->
+  <div class="card">
+    <h3>🏦 Préstamo del banco</h3>
+    <input id="bancoMonto" type="number" placeholder="Monto">
+    <button onclick="prestamoBanco()">Solicitar</button>
   </div>
 
   <!-- HISTORIAL -->
-  <div style="margin-top:15px;">
-    <h3>📄 Historial de Transacciones</h3>
-    <div id="historial"><i>No hay transacciones</i></div>
+  <div class="card">
+    <h3>📄 Historial</h3>
+    <div id="historial"></div>
   </div>
 
-  <!-- PRESTAMOS -->
-  <div style="margin-top:15px;">
-    <h3>📑 Préstamos activos</h3>
-    <div id="prestamos"><i>No hay préstamos</i></div>
+  <!-- PRÉSTAMOS -->
+  <div class="card">
+    <h3>📑 Préstamos</h3>
+    <div id="prestamos"></div>
   </div>
 
-  <div style="margin-top:15px;">
-    <button onclick="logout()">Cerrar sesión</button>
-    <button onclick="eliminarCuenta()" style="background:#ff5c5c;">Eliminar cuenta</button>
-  </div>
+  <button onclick="logout()">Cerrar sesión</button>
+  <button class="red" onclick="eliminarCuenta()">Eliminar cuenta</button>
 </div>
 
 <script>
-// Firebase
+// FIREBASE
 firebase.initializeApp({
   apiKey: "AIzaSyDeUQx95EfJgmNeyh_L2Cnzqmm37emwJhw",
   authDomain: "bancodevito.firebaseapp.com",
@@ -98,306 +91,152 @@ firebase.initializeApp({
   projectId: "bancodevito"
 });
 
-const auth = firebase.auth();
-const db = firebase.database();
+const auth=firebase.auth();
+const db=firebase.database();
 
-let cuentaActual = "", tarjetaActual = "";
-
-// Mostrar/ocultar secciones
-function mostrarLogin(){ loginBox.classList.remove("hidden"); bankBox.classList.add("hidden"); }
-function mostrarBanco(){ loginBox.classList.add("hidden"); bankBox.classList.remove("hidden"); }
+let cuenta="", tarjeta="";
 
 // SESIÓN
 auth.onAuthStateChanged(u=>{
   if(u){
-    mostrarBanco();
+    loginBox.classList.add("hidden");
+    bankBox.classList.remove("hidden");
     cargarBanco(u.uid);
-    cargarHistorial();
-    cargarPrestamos();
-  } else {
-    mostrarLogin();
+  }else{
+    loginBox.classList.remove("hidden");
+    bankBox.classList.add("hidden");
   }
 });
 
 // LOGIN / REGISTRO
-function login(){ auth.signInWithEmailAndPassword(email.value,pass.value).catch(e=>alert(e.message)); }
+function login(){
+  auth.signInWithEmailAndPassword(email.value,pass.value)
+  .catch(e=>alert(e.message));
+}
+
 function register(){
   auth.createUserWithEmailAndPassword(email.value,pass.value)
   .then(r=>{
     const uid=r.user.uid;
-    const cuenta="CUENTA-"+Math.floor(100000+Math.random()*900000);
-    db.ref("usuarios/"+uid).set({cuenta, score:50});
+    cuenta="CUENTA-"+Math.floor(100000+Math.random()*900000);
+    db.ref("usuarios/"+uid).set({cuenta,score:50});
     db.ref("cuentas/"+cuenta).set({saldo:1000});
+    tarjeta="DEV-"+Math.floor(100000+Math.random()*900000);
+    db.ref("tarjetas/"+tarjeta).set({cuenta});
     alert("Cuenta creada ✔️");
   }).catch(e=>alert(e.message));
 }
 
-// CARGAR BANCO
+// CARGAR
 function cargarBanco(uid){
   db.ref("usuarios/"+uid).once("value").then(s=>{
-    cuentaActual = s.val().cuenta;
-    const userScore = s.val().score || 50;
-    score.innerText = userScore;
-    const cuentaRef = db.ref("cuentas/"+cuentaActual);
-    cuentaRef.once("value").then(snap=>{ if(!snap.exists()) cuentaRef.set({saldo:1000}); });
-    db.ref("cuentas/"+cuentaActual+"/saldo").on("value",v=>saldo.innerText=v.val()||0);
+    cuenta=s.val().cuenta;
+    score.innerText=s.val().score||50;
 
-    db.ref("tarjetas").orderByChild("cuenta").equalTo(cuentaActual).once("value").then(r=>{
-      if(r.exists()) r.forEach(x=>tarjetaActual=x.key);
-      else{
-        tarjetaActual="DEV-"+Math.floor(100000+Math.random()*900000);
-        db.ref("tarjetas/"+tarjetaActual).set({cuenta:cuentaActual});
-      }
-      tarjeta.innerText = tarjetaActual;
-    });
-  });
-}
+    db.ref("cuentas/"+cuenta+"/saldo")
+      .on("value",v=>saldo.innerText=v.val()||0);
 
-// ENVÍO MANUAL
-function enviarManual(){
-  const dest = destinoManual.value;
-  const m = parseInt(montoManual.value);
-  if(!dest || !m) return alert("Datos incompletos");
-
-  db.ref("tarjetas/"+dest).once("value").then(t=>{
-    if(!t.exists()) return alert("Tarjeta inválida");
-    moverSaldo(t.val().cuenta,m,"enviado",dest);
-    montoManual.value = "";
-    destinoManual.value = "";
-  });
-}
-
-// PRESTAR DINERO A OTRO JUGADOR
-function prestarJugador(){
-  const receptor = prestamoDestino.value;
-  const monto = parseInt(prestamoMonto.value);
-  const plazo = parseInt(prestamoPlazo.value);
-
-  if(!receptor || !monto || !plazo) return alert("Datos incompletos");
-  db.ref("cuentas/"+cuentaActual+"/saldo").once("value").then(saldo=>{
-    if(saldo.val()<monto) return alert("Saldo insuficiente");
-    db.ref("tarjetas/"+receptor).once("value").then(t=>{
-      if(!t.exists()) return alert("Jugador receptor inválido");
-
-      db.ref("cuentas/"+cuentaActual+"/saldo").set(saldo.val()-monto);
-      db.ref("cuentas/"+t.val().cuenta+"/saldo").transaction(v=>(v||0)+monto);
-
-      const fechaInicio = Math.floor(Date.now()/1000);
-      const prestamoID = "PREST-"+Date.now();
-
-      db.ref("prestamos/"+cuentaActual+"/"+prestamoID).set({
-        receptor: t.val().cuenta,
-        monto,
-        plazoDias: plazo,
-        fechaInicio,
-        pagado: false,
-        tipo:"prestado"
-      });
-      db.ref("prestamos/"+t.val().cuenta+"/"+prestamoID).set({
-        prestamista: cuentaActual,
-        monto,
-        plazoDias: plazo,
-        fechaInicio,
-        pagado: false,
-        tipo:"recibido"
+    db.ref("tarjetas").orderByChild("cuenta")
+      .equalTo(cuenta).once("value").then(r=>{
+        r.forEach(x=>tarjeta=x.key);
+        document.getElementById("tarjeta").innerText=tarjeta;
       });
 
-      alert("Préstamo enviado ✔️");
-      prestamoDestino.value = "";
-      prestamoMonto.value = "";
-      prestamoPlazo.value = "";
-    });
-  });
-}
-
-// SOLICITAR PRÉSTAMO AL BANCO
-function solicitarPrestamoBanco(){
-  const monto = parseInt(prestamoBancoMonto.value);
-  if(!monto) return alert("Ingresa monto");
-
-  db.ref("cuentas/"+cuentaActual).once("value").then(s=>{
-    const saldo = s.val().saldo || 0;
-    db.ref("transacciones/"+cuentaActual).once("value").then(hist=>{
-      let totalRecibido=0;
-      if(hist.exists()){
-        Object.values(hist.val()).forEach(tx=>{
-          if(tx.tipo==="recibido") totalRecibido += tx.monto;
-        });
-      }
-      const maxPrestamo = Math.min(totalRecibido*2, saldo*3, 5000);
-      if(monto > maxPrestamo) return alert("Préstamo rechazado por límite");
-
-      const fechaInicio = Math.floor(Date.now()/1000);
-      const plazoDias = monto<=300?3:(monto<=700?7:14);
-      db.ref("cuentas/"+cuentaActual+"/saldo").set(saldo+monto);
-      const prestamoID = "BANCO-"+Date.now();
-      db.ref("prestamos/"+cuentaActual+"/"+prestamoID).set({
-        monto,
-        fechaInicio,
-        plazoDias,
-        pagado: false,
-        tipo:"banco"
-      });
-      alert(`Préstamo aprobado ✔️ Debes devolver en ${plazoDias} días`);
-      prestamoBancoMonto.value = "";
-      cargarPrestamos();
-    });
-  });
-}
-
-// MOVER SALDO Y GUARDAR TRANSACCIONES
-function moverSaldo(destino,m,tipo,destinoTarjeta=null){
-  const origenRef = db.ref("cuentas/"+cuentaActual+"/saldo");
-  origenRef.once("value").then(s=>{
-    if(s.val()<m) return alert("Saldo insuficiente");
-    origenRef.set(s.val()-m);
-    db.ref("cuentas/"+destino+"/saldo").transaction(v=>(v||0)+m);
-
-    const timestamp = Math.floor(Date.now()/1000);
-    db.ref("transacciones/"+cuentaActual).push({
-      tipo: tipo,
-      monto: m,
-      destino: destinoTarjeta||destino,
-      fecha: timestamp,
-      oculto: false
-    });
-    db.ref("transacciones/"+destino).push({
-      tipo: "recibido",
-      monto: m,
-      origen: cuentaActual,
-      fecha: timestamp,
-      oculto: false
-    });
-
-    alert("Envío realizado ✔️");
     cargarHistorial();
+    cargarPrestamos();
   });
 }
 
-// CARGAR HISTORIAL
+// ENVIAR
+function enviar(){
+  const d=destino.value,m=parseInt(monto.value);
+  if(!d||!m) return alert("Datos incompletos");
+  db.ref("tarjetas/"+d).once("value").then(t=>{
+    if(!t.exists()) return alert("Tarjeta inválida");
+    moverSaldo(t.val().cuenta,m,"Enviado a "+d);
+  });
+}
+
+// MOVER SALDO
+function moverSaldo(dest,m,desc){
+  const ref=db.ref("cuentas/"+cuenta+"/saldo");
+  ref.once("value").then(s=>{
+    if(s.val()<m) return alert("Saldo insuficiente");
+    ref.set(s.val()-m);
+    db.ref("cuentas/"+dest+"/saldo").transaction(v=>(v||0)+m);
+    guardarHistorial(desc,m);
+  });
+}
+
+// HISTORIAL
+function guardarHistorial(desc,m){
+  db.ref("historial/"+cuenta).push({
+    desc,m,fecha:Date.now()
+  });
+  cargarHistorial();
+}
+
 function cargarHistorial(){
-  const ref = db.ref("transacciones/"+cuentaActual);
-  ref.on("value", snapshot=>{
-    historial.innerHTML = "";
-    if(!snapshot.exists()){ historial.innerHTML="<i>No hay transacciones</i>"; return; }
-    Object.entries(snapshot.val()).sort((a,b)=>b[1].fecha-a[1].fecha).forEach(([id,tx])=>{
-      if(tx.oculto) return;
-      const div = document.createElement("div");
-      div.className = "transaccion "+(tx.tipo==="enviado"?"enviado":"recibido");
-      div.innerHTML = `<b>${tx.tipo==="enviado"?"Enviado a":"Recibido de"}:</b> ${tx.destino||tx.origen}<br>
-                       <b>Monto:</b> ${tx.monto} coins<br>
-                       <small>${new Date(tx.fecha*1000).toLocaleString()}</small>
-                       <button onclick="ocultarMovimiento('${id}')">Ocultar</button>`;
-      historial.appendChild(div);
+  historial.innerHTML="";
+  db.ref("historial/"+cuenta).once("value").then(s=>{
+    if(!s.exists()) return historial.innerHTML="<i>Sin movimientos</i>";
+    Object.values(s.val()).reverse().forEach(x=>{
+      historial.innerHTML+=`<div class="item">${x.desc} - ${x.m} coins</div>`;
     });
   });
 }
 
-// OCULTAR MOVIMIENTO
-function ocultarMovimiento(id){
-  db.ref("transacciones/"+cuentaActual+"/"+id+"/oculto").set(true);
+// PRESTAR
+function prestar(){
+  const d=prestDestino.value,m=parseInt(prestMonto.value),dias=parseInt(prestDias.value);
+  if(!d||!m||!dias) return alert("Datos incompletos");
+  db.ref("tarjetas/"+d).once("value").then(t=>{
+    if(!t.exists()) return alert("Jugador inválido");
+    moverSaldo(t.val().cuenta,m,"Préstamo a "+d);
+    db.ref("prestamos/"+t.val().cuenta).push({
+      de:cuenta,m,dias,inicio:Date.now(),pagado:false
+    });
+  });
+}
+
+// PRÉSTAMO BANCO
+function prestamoBanco(){
+  const m=parseInt(bancoMonto.value);
+  if(!m) return alert("Monto inválido");
+  db.ref("cuentas/"+cuenta+"/saldo").transaction(v=>(v||0)+m);
+  db.ref("prestamos/"+cuenta).push({
+    de:"BANCO",m,dias:7,inicio:Date.now(),pagado:false
+  });
 }
 
 // CARGAR PRÉSTAMOS
 function cargarPrestamos(){
-  const ref = db.ref("prestamos/"+cuentaActual);
-  ref.on("value", snapshot=>{
-    prestamos.innerHTML = "";
-    if(!snapshot.exists()){ prestamos.innerHTML="<i>No hay préstamos</i>"; return; }
-    Object.entries(snapshot.val()).sort((a,b)=>b[1].fechaInicio-a[1].fechaInicio).forEach(([id,tx])=>{
-      const div = document.createElement("div");
-      div.className = tx.pagado?"prestamoPagado":"prestamoActivo";
-      let contenido = "";
-      if(tx.tipo==="prestado"){
-        contenido = `<b>Prestado a:</b> ${tx.receptor}<br>
-                     <b>Monto:</b> ${tx.monto}<br>
-                     <b>Plazo:</b> ${tx.plazoDias} días<br>
-                     <b>Inicio:</b> ${new Date(tx.fechaInicio*1000).toLocaleString()}<br>
-                     <b>Estado:</b> ${tx.pagado?"Pagado":"Activo"}`;
-      } else if(tx.tipo==="recibido"){
-        const hoy = Math.floor(Date.now()/1000);
-        const fechaLimite = tx.fechaInicio + tx.plazoDias*86400;
-        const atrasado = !tx.pagado && hoy>fechaLimite;
-        contenido = `<b>Recibido de:</b> ${tx.prestamista}<br>
-                     <b>Monto:</b> ${tx.monto}<br>
-                     <b>Plazo:</b> ${tx.plazoDias} días<br>
-                     <b>Inicio:</b> ${new Date(tx.fechaInicio*1000).toLocaleString()}<br>
-                     <b>Estado:</b> ${tx.pagado?"Pagado":atrasado?"Atrasado":"Activo"}<br>`;
-        if(!tx.pagado){
-          contenido += `<button onclick="pagarPrestamo('${id}')">Pagar préstamo</button>`;
-        }
-      } else if(tx.tipo==="banco"){
-        contenido = `<b>Préstamo del banco:</b><br>
-                     <b>Monto:</b> ${tx.monto}<br>
-                     <b>Plazo:</b> ${tx.plazoDias} días<br>
-                     <b>Inicio:</b> ${new Date(tx.fechaInicio*1000).toLocaleString()}<br>
-                     <b>Estado:</b> ${tx.pagado?"Pagado":"Activo"}<br>`;
-        if(!tx.pagado){
-          contenido += `<button onclick="pagarPrestamoBanco('${id}')">Pagar ahora</button>`;
-        }
-      }
-      div.innerHTML = contenido;
-      prestamos.appendChild(div);
+  prestamos.innerHTML="";
+  db.ref("prestamos/"+cuenta).once("value").then(s=>{
+    if(!s.exists()) return prestamos.innerHTML="<i>Sin préstamos</i>";
+    Object.values(s.val()).forEach(p=>{
+      prestamos.innerHTML+=`<div class="item">
+        De: ${p.de}<br>Monto: ${p.m}<br>Días: ${p.dias}
+      </div>`;
     });
-  });
-}
-
-// PAGAR PRÉSTAMO ENTRE JUGADORES
-function pagarPrestamo(id){
-  db.ref("prestamos/"+cuentaActual+"/"+id).once("value").then(tx=>{
-    if(!tx.exists()) return;
-    const monto = tx.val().monto;
-    db.ref("cuentas/"+cuentaActual+"/saldo").once("value").then(saldo=>{
-      if(saldo.val()<monto) return alert("Saldo insuficiente");
-      db.ref("cuentas/"+cuentaActual+"/saldo").set(saldo.val()-monto);
-      if(tx.val().tipo==="recibido"){
-        const prestamista = tx.val().prestamista;
-        db.ref("cuentas/"+prestamista+"/saldo").transaction(v=>(v||0)+monto);
-        db.ref("prestamos/"+cuentaActual+"/"+id+"/pagado").set(true);
-        db.ref("prestamos/"+prestamista+"/"+id+"/pagado").set(true);
-        alert("Préstamo pagado ✔️");
-      }
-      cargarPrestamos();
-    });
-  });
-}
-
-// PAGAR PRÉSTAMO AL BANCO ANTES DE TIEMPO
-function pagarPrestamoBanco(id){
-  db.ref("prestamos/"+cuentaActual+"/"+id).once("value").then(tx=>{
-    if(!tx.exists() || tx.val().pagado) return;
-    const monto = tx.val().monto;
-    db.ref("cuentas/"+cuentaActual+"/saldo").once("value").then(saldo=>{
-      if(saldo.val()<monto) return alert("Saldo insuficiente");
-      db.ref("cuentas/"+cuentaActual+"/saldo").set(saldo.val()-monto);
-      db.ref("prestamos/"+cuentaActual+"/"+id+"/pagado").set(true);
-      alert("Préstamo al banco pagado ✔️");
-      cargarPrestamos();
-    });
-  });
-}
-
-// ELIMINAR CUENTA
-function eliminarCuenta(){
-  if(!confirm("¿Seguro quieres eliminar tu cuenta? Se borrarán todos tus datos.")) return;
-  const user = auth.currentUser;
-  // Borrar datos de Firebase
-  db.ref("usuarios/"+user.uid).remove();
-  db.ref("cuentas/"+cuentaActual).remove();
-  db.ref("tarjetas/"+tarjetaActual).remove();
-  db.ref("transacciones/"+cuentaActual).remove();
-  db.ref("prestamos/"+cuentaActual).remove();
-  user.delete().then(()=>{
-    alert("Cuenta eliminada ✔️ Ahora puedes registrarte nuevamente con el mismo correo.");
-    mostrarLogin();
-  }).catch(e=>{
-    alert("Error al eliminar cuenta: "+e.message);
   });
 }
 
 // LOGOUT
-function logout(){ auth.signOut().then(()=>{ mostrarLogin(); }); }
+function logout(){ auth.signOut(); }
 
+// ELIMINAR CUENTA
+function eliminarCuenta(){
+  if(!confirm("¿Eliminar cuenta definitivamente?")) return;
+  const u=auth.currentUser;
+  db.ref("usuarios/"+u.uid).remove();
+  db.ref("cuentas/"+cuenta).remove();
+  db.ref("tarjetas/"+tarjeta).remove();
+  db.ref("historial/"+cuenta).remove();
+  db.ref("prestamos/"+cuenta).remove();
+  u.delete().then(()=>alert("Cuenta eliminada ✔️"));
+}
 </script>
+
 </body>
 </html>
